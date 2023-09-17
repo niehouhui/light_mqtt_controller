@@ -10,19 +10,24 @@
 ///////////////////////////////
 #define LEDS 12 // led灯数
 uint32_t leds_number[LEDS];
-uint32_t Colors[7] = {
-    0xFF0000, // 红色
-    0xFF7F00, // 橙色
-    0xFFFF00, // 黄色
-    0x00FF00, // 绿色
+uint32_t Colors[8] = {
+    0x000000, // 黑
+    0xFFFFFF, // 白
+    0xFF0000, // 绿色
+    0x00FF00, // 红色
     0x0000FF, // 蓝色
-    0x4B0082, // 靛色
-    0x8B00FF  // 紫色
+    0x00FFFF, // 粉色
+    0xFF00FF, // 青色
+    0xFFFF00, // 黄色
 };
+void setPixelColor(int pixel, uint8_t red, uint8_t green, uint8_t blue)
+{
+    uint32_t color = (red << 16) | (green << 8) | blue;
+    leds_number[pixel] = color;
+}
 
 /////////////////////////////
 #define BLINK_GPIO 7                                         // 定义一个IO，用于WS2812通信
-#define BLINK1_GPIO 0                                        // 定义一个IO，用于呼吸灯
 #define ws2812b_din_pin_set() gpio_set_level(BLINK_GPIO, 1)  // WS2812宏定义，输出高电平
 #define ws2812b_din_pin_rst() gpio_set_level(BLINK_GPIO, 0); // WS2812宏定义，输出低电平
 
@@ -44,8 +49,7 @@ void ws2812b_rst(void)
 
 void ws2812b_writebyte_byt(uint32_t led)
 {
-    unsigned char i;
-    for (i = 0; i < 24; i++)
+    for (int i = 0; i < 24; i++)
     {
         if (led & 0x800000)
         {
@@ -73,7 +77,8 @@ void ws2812_task(void *pvParameters)
     {
         for (int i = 0; i < LEDS; i++)
         {
-            leds_number[i] = Colors[random() % 7];
+            // leds_number[i] = Colors[random() % 7];
+            leds_number[i] = Colors[i % 8];
         }
         for (int i = 0; i < LEDS; i++)
         {
@@ -100,9 +105,7 @@ void app_main()
     ESP_ERROR_CHECK(ret);
 
     esp_rom_gpio_pad_select_gpio(BLINK_GPIO);
-    esp_rom_gpio_pad_select_gpio(BLINK1_GPIO);
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_direction(BLINK1_GPIO, GPIO_MODE_OUTPUT);
 
     xTaskCreate(&start_task, "start_task", 2048, NULL, 5, start_task_handler);
     esp_task_wdt_deinit();
