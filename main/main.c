@@ -1,112 +1,62 @@
 #include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+#include "esp_wifi.h"
+#include "esp_system.h"
+#include "nvs_flash.h"
+#include "esp_event.h"
+#include "esp_netif.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/gpio.h"
-#include "sdkconfig.h"
-#include "nvs_flash.h"
-#include "esp_task_wdt.h"
-#include "time.h"
-#include "unistd.h"
-///////////////////////////////
-#define LEDS 12 // led灯数
-uint32_t leds_number[LEDS];
-uint32_t Colors[8] = {
-    0x000000, // 黑
-    0xFFFFFF, // 白
-    0xFF0000, // 绿色
-    0x00FF00, // 红色
-    0x0000FF, // 蓝色
-    0x00FFFF, // 粉色
-    0xFF00FF, // 青色
-    0xFFFF00, // 黄色
-};
-void setPixelColor(int pixel, uint8_t red, uint8_t green, uint8_t blue)
-{
-    uint32_t color = (red << 16) | (green << 8) | blue;
-    leds_number[pixel] = color;
-}
+#include "freertos/semphr.h"
+#include "freertos/queue.h"
 
-/////////////////////////////
-#define BLINK_GPIO 7                                         // 定义一个IO，用于WS2812通信
-#define ws2812b_din_pin_set() gpio_set_level(BLINK_GPIO, 1)  // WS2812宏定义，输出高电平
-#define ws2812b_din_pin_rst() gpio_set_level(BLINK_GPIO, 0); // WS2812宏定义，输出低电平
+#include "lwip/sockets.h"
+#include "lwip/dns.h"
+#include "lwip/netdb.h"
 
-TaskHandle_t start_task_handler; // 创建test_task任务句柄
-void delay_ns(int data)          // 假设是100ns，实际上时间不确定
-{
-    int i;
-    for (i = 0; i < (data * 20); i++)
-        ;
-}
+#include "esp_log.h"
+//////////////////////////////////////
 
-void ws2812b_rst(void)
-{
-    ws2812b_din_pin_set();
-    // esp_rom_delay_us(300);
-    delay_ns(500); // 50us
-    ws2812b_din_pin_rst();
-}
+#include "ws2812b.h"
+#include "wifi_smart_config.h"
+#include "tcp_server.h"
+#include "string.h"
+#include "stdlib.h"
+#include "mqtt_server.h"
 
-void ws2812b_writebyte_byt(uint32_t led)
-{
-    for (int i = 0; i < 24; i++)
-    {
-        if (led & 0x800000)
-        {
-            ws2812b_din_pin_set();
-            // esp_rom_delay_us(780);
-            usleep(1);
-            ws2812b_din_pin_rst();
-            delay_ns(5);
-        }
-        else
-        {
-            ws2812b_din_pin_set();
-            delay_ns(3); // 延时***ns
-            ws2812b_din_pin_rst();
-            usleep(1); // 延时1us
-        }
-        led <<= 1;
-    }
-}
 
-void ws2812_task(void *pvParameters)
-{
-
-    while (1)
-    {
-        for (int i = 0; i < LEDS; i++)
-        {
-            // leds_number[i] = Colors[random() % 7];
-            leds_number[i] = Colors[i % 8];
-        }
-        for (int i = 0; i < LEDS; i++)
-        {
-            ws2812b_writebyte_byt(leds_number[i]);
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-}
-
-void start_task(void *pvParameters)
-{
-    xTaskCreate(&ws2812_task, "ws2812_task", 8192, NULL, 4, NULL);
-    vTaskDelete(start_task_handler);
-}
 
 void app_main()
 {
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
+    // if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    // {
+    //     ESP_ERROR_CHECK(nvs_flash_erase());
+    //     ret = nvs_flash_init();
+    // }
     ESP_ERROR_CHECK(ret);
 
-    esp_rom_gpio_pad_select_gpio(BLINK_GPIO);
-    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
+get_led_state_from_nvs();/////////
+    xTaskCreate(&ws2812b_start, "ws2812_task", 1024, NULL, 4, NULL);
+    setPixelColor(0, 255, 0, 0, 1);
 
-    xTaskCreate(&start_task, "start_task", 2048, NULL, 5, start_task_handler);
-    esp_task_wdt_deinit();
+    wifi_connect();
+    while (wifi_smart_get_connect_state() != true)
+    {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+    setPixelColor(0, 255, 255, 0, 1);
+
+    mqtt_connect();
+    // setPixelColor(0, 0, 255, 0, 1);
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
+    // setPixelColor(0, 0, 0, 0, 1);
+
+    while (1)
+    {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
 }
