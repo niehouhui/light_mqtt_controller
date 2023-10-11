@@ -24,6 +24,10 @@
 #define STORAGE_NAME_SPACE "storage_data"
 
 static const char *TAG = "mqtt";
+size_t url_len;
+size_t client_id_len;
+size_t username_len;
+size_t password_len;
 
 void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -149,39 +153,39 @@ bool mqtt_config_by_tcp()
     { /////这个过程中tcp中断会死循环；
         char *guide_string = "please input the mqtt url,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, mqtt_url, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
+        // while (tcp_recvs(tcp_socket, mqtt_url, len) != 1)
+        // {
+        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
+        // }
         tcp_recvs(tcp_socket, mqtt_url, len);
 
         guide_string = "please input the client_id,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, client_id, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
+        // while (tcp_recvs(tcp_socket, client_id, len) != 1)
+        // {
+        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
+        // }
 
         guide_string = "please input the username,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, username, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
+        // while (tcp_recvs(tcp_socket, username, len) != 1)
+        // {
+        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
+        // }
 
         guide_string = "please input the password,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, password, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
+        // while (tcp_recvs(tcp_socket, password, len) != 1)
+        // {
+        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
+        // }
 
         guide_string = "please input the mqtt_port,end with Enterr\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, mqtt_port_s, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
+        // while (tcp_recvs(tcp_socket, mqtt_port_s, len) != 1)
+        // {
+        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
+        // }
         mqtt_port_i = atoi(mqtt_port_s);
 
         guide_string = "Check the message,input \"save\" to save message, input \"reset\" to reset the message\r\n";
@@ -261,15 +265,27 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
     {
         nvs_handle_t handle;
         ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
-        ESP_ERROR_CHECK(nvs_set_blob(handle, "mqtt", &mqtt_cfg, sizeof(mqtt_cfg)));
-        ESP_ERROR_CHECK(nvs_commit(handle));
-        nvs_close(handle);
 
-        esp_mqtt_client_config_t mqtt_cfg11;
-        size_t len = sizeof(mqtt_cfg);
-        ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
-        ESP_ERROR_CHECK(nvs_get_blob(handle, "mqtt", &mqtt_cfg11, &len));
-        printf("mqtt.url :%s    mqtt.client_id :%s\n", mqtt_cfg11.broker.address.uri, mqtt_cfg11.credentials.client_id);
+        ESP_ERROR_CHECK(nvs_set_str(handle, "mqtt_url", mqtt_cfg.broker.address.uri));
+        nvs_get_str(handle, "mqtt_url", NULL, &url_len);
+        ESP_LOGI(TAG, "url len %d", url_len);
+        ESP_ERROR_CHECK(nvs_set_str(handle, "client_id", mqtt_cfg.credentials.client_id));
+        nvs_get_str(handle, "client_id", NULL, &client_id_len);
+        ESP_LOGI(TAG, "client id len %d", client_id_len);
+        ESP_ERROR_CHECK(nvs_set_str(handle, "username", mqtt_cfg.credentials.username));
+        nvs_get_str(handle, "username", NULL, &username_len);
+        ESP_LOGI(TAG, "username len%d", username_len);
+        ESP_ERROR_CHECK(nvs_set_str(handle, "password", mqtt_cfg.credentials.authentication.password));
+        nvs_get_str(handle, "password", NULL, &password_len);
+        ESP_LOGI(TAG, "password len%d", password_len);
+        ESP_ERROR_CHECK(nvs_set_u32(handle, "mqtt_port", mqtt_cfg.broker.address.port));
+
+        ESP_ERROR_CHECK(nvs_set_u32(handle, "url_len", url_len));
+        ESP_ERROR_CHECK(nvs_set_u32(handle, "client_len", client_id_len));
+        ESP_ERROR_CHECK(nvs_set_u32(handle, "username_len", username_len));
+        ESP_ERROR_CHECK(nvs_set_u32(handle, "password_len", password_len));
+
+        ESP_ERROR_CHECK(nvs_commit(handle));
 
         // 迭代nvs命名空间
         nvs_iterator_t it = NULL;
@@ -291,31 +307,33 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
 
 bool mqtt_config_by_nvs()
 {
-    //     esp_err_t err;
-    //     nvs_handle_t handle;
-    //     esp_mqtt_client_config_t mqtt_cfg;
-    //     uint32_t mqtt_cfg_len = sizeof(mqtt_cfg);
-    //     ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
-    //     // err = nvs_get_blob(handle, "mqtt", &mqtt_cfg, &mqtt_cfg_len);读取可能为空；下面防止为空，
-    //       err = nvs_get_blob(handle, "mqtt", NULL, &mqtt_cfg_len);
-    //     if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) return err;
-    //     err = nvs_get_blob(handle, "mqtt", &mqtt_cfg, &mqtt_cfg_len);
+    // esp_mqtt_client_config_t mqtt_cfg;
+    // esp_err_t err;
+    // nvs_handle_t handle;
+    // ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
 
-    // switch (err)
-    //     {
-    //     case ESP_OK:
-    //         ESP_LOGI(TAG, "[data3]: ssid:%s passwd:%s\r\n",mqtt_cfg.broker.address.uri,mqtt_cfg.credentials.client_id);
-    //         break;
-    //     case ESP_ERR_NVS_NOT_FOUND:
-    //         ESP_LOGI(TAG, "mqtt_config not save yet\n");
-    //         break;
-    //     default:
-    //         ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
-    //         break;
-    //     }
-    //     nvs_close(handle);
+    // err = nvs_get_u32(handle, "url_len", &url_len);
+    // if (err != ESP_OK)
+    // {
+    //     ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
     //     return false;
-    /////////////////////////上面是失败的，nvs中的mqtt信息存储后可以读，但重启后就总是读为空，
+    // }
+    // ESP_ERROR_CHECK(nvs_get_u32(handle, "client_len", &client_id_len));
+    // ESP_ERROR_CHECK(nvs_get_u32(handle, "username_len", &username_len));
+    // ESP_ERROR_CHECK(nvs_get_u32(handle, "password_len", &password_len));
+
+    // ESP_ERROR_CHECK(nvs_get_str(handle, "mqtt_url", &mqtt_cfg.broker.address.uri, &url_len));
+    // if (err != ESP_OK)
+    // {
+    //     ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
+    //     return false;
+    // }
+    // ESP_ERROR_CHECK(nvs_get_str(handle, "client_id", &mqtt_cfg.credentials.client_id, &client_id_len));
+    // ESP_ERROR_CHECK(nvs_get_str(handle, "username", &mqtt_cfg.credentials.username, &username_len));
+    // ESP_ERROR_CHECK(nvs_get_str(handle, "password", &mqtt_cfg.credentials.authentication.password, &password_len));
+    // ESP_ERROR_CHECK(nvs_get_u32(handle, "mqtt_port", &mqtt_cfg.broker.address.port));
+
+    // nvs_close(handle);
 
     esp_mqtt_client_config_t mqtt_cfg = {
         // .broker.address.uri = CONFIG_BROKER_URL,
@@ -326,6 +344,7 @@ bool mqtt_config_by_nvs()
         .credentials.authentication.password = "guest",
         .broker.address.port = 1883,
     };
+
     mqtt_app_start(mqtt_cfg);
     return true;
 }

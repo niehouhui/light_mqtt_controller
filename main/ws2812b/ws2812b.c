@@ -47,7 +47,7 @@ bool get_led_state_from_nvs()
     err = nvs_get_u32(handle, "led_len", &led_len);
     ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
     ESP_LOGI(TAG, "led_len  %d", led_len);
-    led_len=led_len*4;
+    led_len=led_len*4;//存在nvs中的leds长是存进去的4倍
     uint32_t *p = (uint32_t *)malloc(sizeof(leds_number[0])*led_len);
     leds_number=p;
     err = nvs_get_blob(handle, "leds", leds_number, &led_len);
@@ -58,9 +58,9 @@ bool get_led_state_from_nvs()
         ESP_LOGI(TAG, "led_len  %d", led_len);
         break;
 
-    default:
-    ESP_LOGI(TAG, "led_len  %d", led_len);
+    default:  
         ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
+        ESP_LOGI(TAG, "led_len  %d", led_len);
         break;
     }
 
