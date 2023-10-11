@@ -32,14 +32,15 @@
 void app_main()
 {
     esp_err_t ret = nvs_flash_init();
-    // if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    // {
-    //     ESP_ERROR_CHECK(nvs_flash_erase());
-    //     ret = nvs_flash_init();
-    // }
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
     ESP_ERROR_CHECK(ret);
 
-get_led_state_from_nvs();/////////
+    get_led_state_from_nvs();
+
     xTaskCreate(&ws2812b_start, "ws2812_task", 1024, NULL, 4, NULL);
     setPixelColor(0, 255, 0, 0, 1);
 
@@ -51,9 +52,9 @@ get_led_state_from_nvs();/////////
     setPixelColor(0, 255, 255, 0, 1);
 
     mqtt_connect();
-    // setPixelColor(0, 0, 255, 0, 1);
+    setPixelColor(0, 0, 255, 0, 1);
     vTaskDelay(3000 / portTICK_PERIOD_MS);
-    // setPixelColor(0, 0, 0, 0, 1);
+    setPixelColor(0, 0, 0, 0, 1);
 
     while (1)
     {

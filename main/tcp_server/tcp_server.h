@@ -8,7 +8,7 @@
 
 
 #define Listen_TCP_Port			8080			
-static int tcp_connect_socket = 0;
+
 
 int  create_tcp_server();
 void close_tcp_server();

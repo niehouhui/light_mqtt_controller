@@ -10,6 +10,10 @@
 #include "nvs.h"
 #include "esp_system.h"
 #include "wifi_smart_config.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#define STORAGE_NAME_SPACE     "storage_data"
 
 static const char *TAG = "wifi smart config";
 
@@ -55,7 +59,7 @@ void wifi_smart_config_task(void *arg, esp_event_base_t event_base, int32_t even
             // nhh nvs
             esp_err_t err;
             nvs_handle_t handle;
-            nvs_open("nhh_data", NVS_READWRITE, &handle);
+            nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
             err = nvs_set_blob(handle, "blob_wifi", &wifi_config, sizeof(wifi_config));
             switch (err)
             {
@@ -117,7 +121,7 @@ bool nvs_restart_wificonfig()
     wifi_config_t wifi_config;
     uint32_t wifi_len = sizeof(wifi_config);
     nvs_handle_t handle;
-    ESP_ERROR_CHECK(nvs_open("nhh_data", NVS_READWRITE, &handle));
+    ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
     err = nvs_get_blob(handle, "blob_wifi", &wifi_config, &wifi_len);
     switch (err)
     {

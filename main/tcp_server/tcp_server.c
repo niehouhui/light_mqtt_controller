@@ -14,7 +14,7 @@
 
 
 #define  TAG   "TCP"
-//static int tcp_connect_socket = 0;
+static int tcp_connect_socket = 0;
 static int tcp_server_socket = 0;
 static struct sockaddr_in tcp_client_addr;
 	static unsigned int tcp_socklen = sizeof(tcp_client_addr);
