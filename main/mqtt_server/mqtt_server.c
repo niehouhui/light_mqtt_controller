@@ -80,7 +80,7 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
                 nvs_erase_key(handle, "leds");
                 ws2812b_reset(js_led_total->valueint);
                 nvs_commit(handle);
-                printf("nvs_erase the led\n");
+                msg_id = esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recv", " the led reset now", 0, 1, 0);
                 vTaskDelay(100 / portTICK_PERIOD_MS);
                 break;
             }
@@ -118,7 +118,9 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
         cJSON *js_red = cJSON_GetObjectItemCaseSensitive(json, "red");
         cJSON *js_green = cJSON_GetObjectItemCaseSensitive(json, "green");
         cJSON *js_blue = cJSON_GetObjectItemCaseSensitive(json, "blue");
-        setPixelColor(js_index->valueint, (uint8_t)js_red->valueint, (uint8_t)js_green->valueint, (uint8_t)js_blue->valueint, js_brightness->valueint);
+        setPixelColor((js_index->valueint), (uint8_t)js_red->valueint, (uint8_t)js_green->valueint, (uint8_t)js_blue->valueint, js_brightness->valueint);
+        msg_id = esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recv", " the led changed now", 0, 1, 0);
+
         break;
     case MQTT_EVENT_ERROR:
         ESP_LOGI(TAG, "MQTT_EVENT_ERROR");

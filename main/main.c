@@ -52,12 +52,13 @@ void app_main()
     setPixelColor(0, 255, 255, 0, 1);
 
     mqtt_connect();
+    
     setPixelColor(0, 0, 255, 0, 1);
-    vTaskDelay(3000 / portTICK_PERIOD_MS);
-    setPixelColor(0, 0, 0, 0, 1);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
 
     while (1)
     {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
     }
 }
