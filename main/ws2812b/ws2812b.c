@@ -17,11 +17,12 @@
 #define ws2812b_din_pin_set() gpio_set_level(BLINK_GPIO, 1)
 #define ws2812b_din_pin_rst() gpio_set_level(BLINK_GPIO, 0);
 #define STORAGE_NAME_SPACE "storage_data"
+#define PARTITION_NAME "map_data"
 
 static const char *TAG = "ws2812b";
 
 size_t led_len = 3;
-uint32_t led[] = {0xffffff, 0, 0};
+uint32_t led[] = {0, 0, 0};
 uint32_t *leds_number = led;
 
 void delay_ns(int data) // 估计延时100us
@@ -61,14 +62,17 @@ void setPixelColor(int pixel, uint8_t red, uint8_t green, uint8_t blue, uint8_t 
     nvs_handle_t handle;
     esp_err_t err;
     err = nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+    // nvs_open_from_partition(PARTITION_NAME, STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+
     // err = nvs_get_u32(handle, "led_len", &led_len);
     nvs_set_blob(handle, "leds", leds_number, sizeof(leds_number[0]) * led_len);
     nvs_commit(handle);
     nvs_close(handle);
-            for (int i = 0; i < led_len; i++)
-        {
-            ws2812b_writebyte_byt(leds_number[i]);
-        }
+    for (int i = 0; i < led_len; i++)
+    {
+        ws2812b_writebyte_byt(leds_number[i]);
+    }
+    printf("%06lx\n",leds_number[0]);
 }
 
 bool get_led_state_from_nvs()
@@ -76,12 +80,14 @@ bool get_led_state_from_nvs()
     esp_err_t err;
     nvs_handle_t handle;
     nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-    err = nvs_get_u32(handle, "led_len", &led_len);
+    // nvs_open_from_partition(PARTITION_NAME, STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+
+    err = nvs_get_u32(handle, "led_len", (uint32_t*)&led_len);
     ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
     ESP_LOGI(TAG, "led_len  %d", led_len);
-    led_len=led_len*4;//存在nvs中的leds长是存进去的4倍
-    uint32_t *p = (uint32_t *)malloc(sizeof(leds_number[0])*led_len);
-    leds_number=p;
+    led_len = led_len * 4; // 存在nvs中的leds长是存进去的4倍
+    uint32_t *p = (uint32_t *)malloc(sizeof(leds_number[0]) * led_len);
+    leds_number = p;
     err = nvs_get_blob(handle, "leds", leds_number, &led_len);
     switch (err)
     {
@@ -90,7 +96,7 @@ bool get_led_state_from_nvs()
         ESP_LOGI(TAG, "led_len  %d", led_len);
         break;
 
-    default:  
+    default:
         ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
         ESP_LOGI(TAG, "led_len  %d", led_len);
         break;
@@ -100,18 +106,16 @@ bool get_led_state_from_nvs()
     return true;
 }
 
-
-
 void ws2812b_start()
 {
 
     esp_rom_gpio_pad_select_gpio(BLINK_GPIO);
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
     // get_led_state_from_nvs();//调用就蹦有问题，
-        for (int i = 0; i < led_len; i++)
-        {
-            ws2812b_writebyte_byt(leds_number[i]);
-        }
+    for (int i = 0; i < led_len; i++)
+    {
+        ws2812b_writebyte_byt(leds_number[i]);
+    }
     while (1)
     {
 
@@ -123,19 +127,22 @@ void ws2812b_reset(int led_total)
 {
 
     uint32_t *p = (uint32_t *)malloc(sizeof(leds_number[0]) * led_total);
+    for (int i = 0; i < led_total; i++)
+        p[i] = 0;
     leds_number = p;
     for (int i = 0; i < led_total; i++)
-        leds_number[i] = 0;
-    for (int i = 0; i < led_total; i++)
-        ws2812b_writebyte_byt(leds_number[i]);    
-    led_len=led_total;
+        ws2812b_writebyte_byt(leds_number[i]);
+    led_len = led_total;
     nvs_handle_t handle;
     nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+    // nvs_open_from_partition(PARTITION_NAME, STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+
     nvs_set_u32(handle, "led_len", led_len);
     esp_err_t err;
-    err=nvs_set_blob(handle, "leds", leds_number, sizeof(leds_number[0]) * led_len);
+    err = nvs_set_blob(handle, "leds", leds_number, sizeof(leds_number[0]) * led_len);
     ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
     nvs_commit(handle);
     nvs_close(handle);
+    p = NULL;
     free(p);
 }

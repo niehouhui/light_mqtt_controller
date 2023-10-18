@@ -38,6 +38,7 @@ void app_main()
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    nvs_flash_init_partition("map_data");
 
     get_led_state_from_nvs();
 
@@ -55,7 +56,7 @@ void app_main()
     
     setPixelColor(0, 0, 255, 0, 1);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-
+    setPixelColor(0, 0, 0, 0, 1);
 
     while (1)
     {
