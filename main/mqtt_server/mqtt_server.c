@@ -20,6 +20,7 @@
 #include "ws2812b.h"
 #include "tcp_server.h"
 #include "mqtt_server.h"
+#include "esp_spiffs.h"
 
 #define STORAGE_NAME_SPACE "storage_data"
 
@@ -85,30 +86,33 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
                 break;
             }
 
-        cJSON *js_reset_mqtt = cJSON_GetObjectItemCaseSensitive(json, "reset_mqtt");
-        if (js_reset_mqtt != NULL && cJSON_IsNumber(js_reset_mqtt))
-            if (js_reset_mqtt->valueint == 1)
-            {
-                nvs_erase_key(handle, "mqtt");
-                nvs_commit(handle);
-                printf("nvs_erase the mqtt\n");
-                vTaskDelay(100 / portTICK_PERIOD_MS);
-                break;
-            }
-
-        cJSON *js_reset_all = cJSON_GetObjectItemCaseSensitive(json, "reset_all");
+                cJSON *js_reset_all = cJSON_GetObjectItemCaseSensitive(json, "reset_all");
         if (js_reset_all != NULL && cJSON_IsNumber(js_reset_all))
             if (js_reset_all->valueint == 1)
             {
                 nvs_erase_all(handle);
                 nvs_commit(handle);
-                printf("nvs_erase the all\n");
+
+                esp_vfs_spiffs_conf_t conf = {
+                    .base_path = "/spiffs",
+                    .partition_label = NULL,
+                    .max_files = 10,
+                    .format_if_mount_failed = true};
+                esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+                unlink("/spiffs/url.txt");
+                unlink("/spiffs/client.txt");
+                unlink("/spiffs/username.txt");
+                unlink("/spiffs/password.txt");
+                unlink("/spiffs/port.txt");
+                esp_vfs_spiffs_unregister(conf.partition_label);
                 vTaskDelay(100 / portTICK_PERIOD_MS);
+                printf("nvs_erase the all\n");
                 break;
-            };
+            };    
 
         nvs_close(handle);
-        ////////////////////
+
         cJSON *js_index = cJSON_GetObjectItemCaseSensitive(json, "index");
         if (js_index != NULL && cJSON_IsNumber(js_index))
         {
@@ -155,39 +159,39 @@ bool mqtt_config_by_tcp()
     { /////这个过程中tcp中断会死循环；
         char *guide_string = "please input the mqtt url,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        // while (tcp_recvs(tcp_socket, mqtt_url, len) != 1)
-        // {
-        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-        // }
+        while (tcp_recvs(tcp_socket, mqtt_url, len) != 1)
+        {
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+        }
         tcp_recvs(tcp_socket, mqtt_url, len);
 
         guide_string = "please input the client_id,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        // while (tcp_recvs(tcp_socket, client_id, len) != 1)
-        // {
-        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-        // }
+        while (tcp_recvs(tcp_socket, client_id, len) != 1)
+        {
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+        }
 
         guide_string = "please input the username,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        // while (tcp_recvs(tcp_socket, username, len) != 1)
-        // {
-        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-        // }
+        while (tcp_recvs(tcp_socket, username, len) != 1)
+        {
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+        }
 
         guide_string = "please input the password,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        // while (tcp_recvs(tcp_socket, password, len) != 1)
-        // {
-        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-        // }
+        while (tcp_recvs(tcp_socket, password, len) != 1)
+        {
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+        }
 
         guide_string = "please input the mqtt_port,end with Enterr\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        // while (tcp_recvs(tcp_socket, mqtt_port_s, len) != 1)
-        // {
-        //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-        // }
+        while (tcp_recvs(tcp_socket, mqtt_port_s, len) != 1)
+        {
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+        }
         mqtt_port_i = atoi(mqtt_port_s);
 
         guide_string = "Check the message,input \"save\" to save message, input \"reset\" to reset the message\r\n";
@@ -205,53 +209,50 @@ bool mqtt_config_by_tcp()
         .credentials.authentication.password = password,
         .broker.address.port = mqtt_port_i,
     };
+    //////////////////使用spiffs存储mqtt连接状态数据，
+    ESP_LOGI(TAG, "Initializing SPIFFS");
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 10,
+        .format_if_mount_failed = true};
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(conf.partition_label, &total, &used);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
+        esp_spiffs_format(conf.partition_label);
+        return false;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+
+    FILE *f = fopen("/spiffs/url.txt", "w");
+    fprintf(f, mqtt_url);
+    fclose(f);
+    f = fopen("/spiffs/client.txt", "w");
+    fprintf(f, client_id);
+    fclose(f);
+    f = fopen("/spiffs/username.txt", "w");
+    fprintf(f, username);
+    fclose(f);
+    f = fopen("/spiffs/password.txt", "w");
+    fprintf(f, password);
+    fclose(f);
+    f = fopen("/spiffs/port.txt", "w");
+    fprintf(f, mqtt_port_s);
+    fclose(f);
+    esp_vfs_spiffs_unregister(conf.partition_label);
 
     return mqtt_app_start(mqtt_tcp_cfg);
 }
 
 bool mqtt_app_start(esp_mqtt_client_config_t cfg)
 {
-    // esp_mqtt_client_config_t mqtt_cfg = {
-    //     // .broker.address.uri = CONFIG_BROKER_URL,
-
-    //     .broker.address.uri = mqtt_url,
-    //     .credentials.client_id = client_id,
-    //     .credentials.username = username,
-    //     .credentials.authentication.password = password,
-    //     .broker.address.port = mqtt_port_i,
-    // };
-    // #if CONFIG_BROKER_URL_FROM_STDIN
-    //     char line[128];
-
-    //     if (strcmp(mqtt_cfg.broker.address.uri, "FROM_STDIN") == 0)
-    //     {
-    //         int count = 0;
-    //         printf("Please enter url of mqtt broker\n");
-    //         while (count < 128)
-    //         {
-    //             int c = fgetc(stdin);
-    //             if (c == '\n')
-    //             {
-    //                 line[count] = '\0';
-    //                 break;
-    //             }
-    //             else if (c > 0 && c < 127)
-    //             {
-    //                 line[count] = c;
-    //                 ++count;
-    //             }
-    //             vTaskDelay(10 / portTICK_PERIOD_MS);
-    //         }
-    //         mqtt_cfg.broker.address.uri = line;
-    //         printf("Broker url: %s\n", line);
-    //     }
-    //     else
-    //     {
-    //         ESP_LOGE(TAG, "Configuration mismatch: wrong broker url");
-    //         abort();
-    //     }
-    // #endif /* CONFIG_BROKER_URL_FROM_STDIN */
-
     esp_mqtt_client_config_t mqtt_cfg = cfg;
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     if (client == NULL)
@@ -267,28 +268,6 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
     {
         nvs_handle_t handle;
         ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
-
-        ESP_ERROR_CHECK(nvs_set_str(handle, "mqtt_url", mqtt_cfg.broker.address.uri));
-        nvs_get_str(handle, "mqtt_url", NULL, &url_len);
-        ESP_LOGI(TAG, "url len %d", url_len);
-        ESP_ERROR_CHECK(nvs_set_str(handle, "client_id", mqtt_cfg.credentials.client_id));
-        nvs_get_str(handle, "client_id", NULL, &client_id_len);
-        ESP_LOGI(TAG, "client id len %d", client_id_len);
-        ESP_ERROR_CHECK(nvs_set_str(handle, "username", mqtt_cfg.credentials.username));
-        nvs_get_str(handle, "username", NULL, &username_len);
-        ESP_LOGI(TAG, "username len%d", username_len);
-        ESP_ERROR_CHECK(nvs_set_str(handle, "password", mqtt_cfg.credentials.authentication.password));
-        nvs_get_str(handle, "password", NULL, &password_len);
-        ESP_LOGI(TAG, "password len%d", password_len);
-        ESP_ERROR_CHECK(nvs_set_u32(handle, "mqtt_port", mqtt_cfg.broker.address.port));
-
-        ESP_ERROR_CHECK(nvs_set_u32(handle, "url_len", url_len));
-        ESP_ERROR_CHECK(nvs_set_u32(handle, "client_len", client_id_len));
-        ESP_ERROR_CHECK(nvs_set_u32(handle, "username_len", username_len));
-        ESP_ERROR_CHECK(nvs_set_u32(handle, "password_len", password_len));
-
-        ESP_ERROR_CHECK(nvs_commit(handle));
-
         // 迭代nvs命名空间
         nvs_iterator_t it = NULL;
         esp_err_t res = nvs_entry_find("nvs", STORAGE_NAME_SPACE, NVS_TYPE_ANY, &it);
@@ -307,55 +286,135 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
     return false;
 }
 
-bool mqtt_config_by_nvs()
+// bool mqtt_config_by_nvs()
+// {
+//     esp_mqtt_client_config_t mqtt_cfg;
+//     // 将mqtt数据以字符串存入nvs再读出，读出失败，程序崩溃
+//     esp_err_t err;
+//     nvs_handle_t handle;
+//     ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
+
+//     err = nvs_get_u32(handle, "url_len", &url_len);
+//     if (err != ESP_OK)
+//     {
+//         ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
+//         return false;
+//     }
+//     ESP_ERROR_CHECK(nvs_get_u32(handle, "client_len", &client_id_len));
+//     ESP_ERROR_CHECK(nvs_get_u32(handle, "username_len", &username_len));
+//     ESP_ERROR_CHECK(nvs_get_u32(handle, "password_len", &password_len));
+
+//     ESP_ERROR_CHECK(nvs_get_str(handle, "mqtt_url", &mqtt_cfg.broker.address.uri, &url_len));
+//     if (err != ESP_OK)
+//     {
+//         ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
+//         return false;
+//     }
+//     ESP_ERROR_CHECK(nvs_get_str(handle, "client_id", &mqtt_cfg.credentials.client_id, &client_id_len));
+//     ESP_ERROR_CHECK(nvs_get_str(handle, "username", &mqtt_cfg.credentials.username, &username_len));
+//     ESP_ERROR_CHECK(nvs_get_str(handle, "password", &mqtt_cfg.credentials.authentication.password, &password_len));
+//     ESP_ERROR_CHECK(nvs_get_u32(handle, "mqtt_port", &mqtt_cfg.broker.address.port));
+
+//     ///////将mqtt数据以二进制数据直接存取，读取失败，为空
+//     // size_t mqtt_len=sizeof(mqtt_cfg);
+//     // err=nvs_get_blob(handle,"blob_mqtt",&mqtt_cfg,&mqtt_len);
+//     //  if (err != ESP_OK)
+//     // {
+//     //     ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
+//     //     nvs_close(handle);
+//     //     return false;
+//     // }
+//     // //只能读出1883端口，其他都是乱码
+//     // ESP_LOGI(TAG, "faill to open file mqtt_cfg  %s 1 %s 1 %s 1 %ld", mqtt_cfg.broker.address.uri,mqtt_cfg.credentials.client_id,mqtt_cfg.credentials.username,mqtt_cfg.broker.address.port);
+//     // nvs_close(handle);
+
+//     // esp_mqtt_client_config_t mqtt_cfg = {
+//     //     // .broker.address.uri = CONFIG_BROKER_URL,
+
+//     //     .broker.address.uri = "mqtt://fiber-doctor.com",
+//     //     .credentials.client_id = "MQTT_Clients",
+//     //     .credentials.username = "guest",
+//     //     .credentials.authentication.password = "guest",
+//     //     .broker.address.port = 1883,
+//     // };
+//     ESP_LOGI(TAG, "faill to open file mqtt_cfg  %s 1 %s 1 %s 1 %ld", mqtt_cfg.broker.address.uri, mqtt_cfg.credentials.client_id, mqtt_cfg.credentials.username, mqtt_cfg.broker.address.port);
+
+//     mqtt_app_start(mqtt_cfg);
+//     return true;
+// }
+
+bool mqtt_config_by_spiffs()
 {
-    // esp_mqtt_client_config_t mqtt_cfg;
-    // esp_err_t err;
-    // nvs_handle_t handle;
-    // ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
+    char mqtt_url[128] = {0};
+    char client_id[128] = {0};
+    char username[128] = {0};
+    char password[128] = {0};
+    char mqtt_port_s[128] = {0};
+    int mqtt_port_i = 0;
 
-    // err = nvs_get_u32(handle, "url_len", &url_len);
-    // if (err != ESP_OK)
-    // {
-    //     ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
-    //     return false;
-    // }
-    // ESP_ERROR_CHECK(nvs_get_u32(handle, "client_len", &client_id_len));
-    // ESP_ERROR_CHECK(nvs_get_u32(handle, "username_len", &username_len));
-    // ESP_ERROR_CHECK(nvs_get_u32(handle, "password_len", &password_len));
+    ESP_LOGI(TAG, "Initializing SPIFFS");
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 10,
+        .format_if_mount_failed = true};
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
 
-    // ESP_ERROR_CHECK(nvs_get_str(handle, "mqtt_url", &mqtt_cfg.broker.address.uri, &url_len));
-    // if (err != ESP_OK)
-    // {
-    //     ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
-    //     return false;
-    // }
-    // ESP_ERROR_CHECK(nvs_get_str(handle, "client_id", &mqtt_cfg.credentials.client_id, &client_id_len));
-    // ESP_ERROR_CHECK(nvs_get_str(handle, "username", &mqtt_cfg.credentials.username, &username_len));
-    // ESP_ERROR_CHECK(nvs_get_str(handle, "password", &mqtt_cfg.credentials.authentication.password, &password_len));
-    // ESP_ERROR_CHECK(nvs_get_u32(handle, "mqtt_port", &mqtt_cfg.broker.address.port));
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(conf.partition_label, &total, &used);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
+        esp_spiffs_format(conf.partition_label);
+        return false;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
 
-    // nvs_close(handle);
+    FILE *f = fopen("/spiffs/client.txt", "r");
+    if (f == NULL)
+        return false;
+    fgets(client_id, sizeof(client_id), f);
+    fclose(f);
+    f = fopen("/spiffs/url.txt", "r");
+    fgets(mqtt_url, sizeof(mqtt_url), f);
+    fclose(f);
+    f = fopen("/spiffs/username.txt", "r");
+    fgets(username, sizeof(username), f);
+    fclose(f);
+    f = fopen("/spiffs/password.txt", "r");
+    fgets(password, sizeof(password), f);
+    fclose(f);
+    f = fopen("/spiffs/port.txt", "r");
+    fgets(mqtt_port_s, sizeof(mqtt_port_s), f);
+    mqtt_port_i = atoi(mqtt_port_s);
+    fclose(f);
+
+    esp_vfs_spiffs_unregister(conf.partition_label);
+    memcpy(client_id, "MQTT_Clients", sizeof("MQTT_Clients"));
+
+    ESP_LOGI(TAG, "mqtt_cfg  id %s url %s username %s mqtt_port %d", client_id, mqtt_url, username, mqtt_port_i);
 
     esp_mqtt_client_config_t mqtt_cfg = {
-        // .broker.address.uri = CONFIG_BROKER_URL,
-
-        .broker.address.uri = "mqtt://fiber-doctor.com",
-        .credentials.client_id = "MQTT_Client",
-        .credentials.username = "guest",
-        .credentials.authentication.password = "guest",
-        .broker.address.port = 1883,
+        .broker.address.uri = mqtt_url,
+        .credentials.client_id = client_id,
+        .credentials.username = username,
+        .credentials.authentication.password = password,
+        .broker.address.port = mqtt_port_i,
     };
 
-    mqtt_app_start(mqtt_cfg);
-    return true;
+    return mqtt_app_start(mqtt_cfg);
 }
 
 void mqtt_connect()
 {
-    if (mqtt_config_by_nvs())
+    // if (mqtt_config_by_nvs())
+    if (mqtt_config_by_spiffs())
     {
-        ESP_LOGI(TAG, "mqtt set by nvs success");
+        // ESP_LOGI(TAG, "mqtt set by nvs success");
+        ESP_LOGI(TAG, "mqtt set by spiffs success");
     }
     else
     {

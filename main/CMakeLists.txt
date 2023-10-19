@@ -9,7 +9,7 @@ idf_component_register(
                                 "./wifi-smart-config"
                                 "./ws2812b"
                                 "./mqtt_server"
-                    REQUIRES  driver nvs_flash esp_wifi mqtt json 
+                    REQUIRES  driver nvs_flash esp_wifi mqtt json spiffs
                     )
 
 
