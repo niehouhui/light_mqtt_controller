@@ -119,10 +119,10 @@ bool nvs_restart_wificonfig()
 {
     esp_err_t err;
     wifi_config_t wifi_config;
-    uint32_t wifi_len = sizeof(wifi_config);
+    size_t wifi_len = sizeof(wifi_config);
     nvs_handle_t handle;
     ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
-    err = nvs_get_blob(handle, "blob_wifi", &wifi_config, &wifi_len);
+    err = nvs_get_blob(handle, "blob_wifi", &wifi_config,&wifi_len);
     switch (err)
     {
     case ESP_OK:

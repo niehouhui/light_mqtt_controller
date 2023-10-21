@@ -7,11 +7,12 @@
 
 
 
-
-void setPixelColor(int pixel, uint8_t red, uint8_t green, uint8_t blue, uint8_t brightness);
-void ws2812b_start();
-bool get_led_state_from_nvs();
-void ws2812b_reset(int led_total);
+bool led_strip_config();
+bool led_strip_rm();
+bool led_display();
+bool set_led_color(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness);
+bool set_led_length(int led_lens);
+bool get_led_config_from_nvs();
 
 
 #endif

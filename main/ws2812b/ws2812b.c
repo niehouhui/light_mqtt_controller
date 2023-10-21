@@ -1,148 +1,209 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/gpio.h"
-#include "sdkconfig.h"
+#include "led_strip.h"
+#include "esp_log.h"
+#include "esp_err.h"
+#include "led_strip_rmt.h"
 #include "nvs_flash.h"
 #include "nvs.h"
-#include "esp_task_wdt.h"
-#include "time.h"
-#include "unistd.h"
-#include "string.h"
-#include "esp_log.h"
-#include "esp_system.h"
-
 #include "ws2812b.h"
-#define BLINK_GPIO 7
-#define ws2812b_din_pin_set() gpio_set_level(BLINK_GPIO, 1)
-#define ws2812b_din_pin_rst() gpio_set_level(BLINK_GPIO, 0);
+#include "esp_spiffs.h"
+
+#define LED_STRIP_GPIO 7
+#define LED_STRIP_RMT_RES_HZ (10 * 1000 * 1000)
 #define STORAGE_NAME_SPACE "storage_data"
 #define PARTITION_NAME "map_data"
 
-static const char *TAG = "ws2812b";
+static const char *TAG = "led_strip";
 
-size_t led_len = 3;
-uint32_t led[] = {0, 0, 0};
-uint32_t *leds_number = led;
-
-void delay_ns(int data) // 估计延时100us
+typedef struct
 {
-    int i;
-    for (i = 0; i < (data * 20); i++)
-        ;
+    uint32_t red;
+    uint32_t green;
+    uint32_t blue;
+    int brightness;
+} led_color_t;
+
+led_color_t leds_init_color[1] = {{255, 0, 0, 1}};
+led_color_t *leds_color = leds_init_color;
+
+int led_len = 4;
+led_strip_handle_t led_strip;
+
+bool led_strip_config()
+{
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = LED_STRIP_GPIO,         // The GPIO that connected to the LED strip's data line
+        .max_leds = led_len,                      // The number of LEDs in the strip,
+        .led_pixel_format = LED_PIXEL_FORMAT_GRB, // Pixel format of your LED strip
+        .led_model = LED_MODEL_WS2812,            // LED strip model
+        .flags.invert_out = false,                // whether to invert the output signal
+    };
+
+    // LED strip backend configuration: RMT
+    led_strip_rmt_config_t rmt_config = {
+        // .clk_src = RMT_CLK_SRC_DEFAULT,        // different clock source can lead to different power consumption
+        .resolution_hz = LED_STRIP_RMT_RES_HZ, // RMT counter clock frequency
+        // .flags.with_dma = false,               // DMA feature is available on ESP target like ESP32-S3
+    };
+    led_strip_rm();
+    // LED Strip object handle
+    led_strip_handle_t led_strip_temp;
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip_temp));
+    led_strip = led_strip_temp;
+    led_strip_clear(led_strip);
+
+    ESP_LOGI(TAG, "Created LED strip object with RMT backend");
+    return true;
+}
+bool led_strip_rm()
+{
+    led_strip_del(led_strip);
+    return true;
 }
 
-void ws2812b_writebyte_byt(uint32_t led)
+bool set_led_length(int led_lens)
 {
-    for (int i = 0; i < 24; i++)
-    {
-        if (led & 0x800000)
-        {
-            ws2812b_din_pin_set();
-            usleep(1);
-            ws2812b_din_pin_rst();
-            delay_ns(300);
-        }
-        else
-        {
-            ws2812b_din_pin_set();
-            delay_ns(300);
-            ws2812b_din_pin_rst();
-            usleep(1);
-        }
-        led <<= 1;
-    }
-}
 
-void setPixelColor(int pixel, uint8_t red, uint8_t green, uint8_t blue, uint8_t brightness)
-{
-    uint32_t color = ((green / brightness) << 16) | ((red / brightness) << 8) | (blue / brightness);
-    leds_number[pixel] = color;
-
-    nvs_handle_t handle;
-    esp_err_t err;
-    err = nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-    // nvs_open_from_partition(PARTITION_NAME, STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-
-    // err = nvs_get_u32(handle, "led_len", &led_len);
-    nvs_set_blob(handle, "leds", leds_number, sizeof(leds_number[0]) * led_len);
-    nvs_commit(handle);
-    nvs_close(handle);
+    led_len = led_lens;
+    leds_color = (led_color_t *)malloc(sizeof(led_color_t) * led_len);
     for (int i = 0; i < led_len; i++)
     {
-        ws2812b_writebyte_byt(leds_number[i]);
+        led_color_t temp = {0, 0, 0, 1};
+        leds_color[i] = temp;
     }
-    printf("%06lx\n",leds_number[0]);
-}
-
-bool get_led_state_from_nvs()
-{
+    led_strip_config();
+    led_display();
     esp_err_t err;
     nvs_handle_t handle;
-    nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-    // nvs_open_from_partition(PARTITION_NAME, STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-
-    err = nvs_get_u32(handle, "led_len", (uint32_t*)&led_len);
-    ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
-    ESP_LOGI(TAG, "led_len  %d", led_len);
-    led_len = led_len * 4; // 存在nvs中的leds长是存进去的4倍
-    uint32_t *p = (uint32_t *)malloc(sizeof(leds_number[0]) * led_len);
-    leds_number = p;
-    err = nvs_get_blob(handle, "leds", leds_number, &led_len);
+    err = nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+    ESP_LOGI(TAG, "set led_len error  %s\n", esp_err_to_name(err));
+    err = nvs_set_i32(handle, "led_len", led_len);
     switch (err)
     {
     case ESP_OK:
-        ESP_LOGI(TAG, "nvs_get     led");
-        ESP_LOGI(TAG, "led_len  %d", led_len);
+        ESP_LOGI(TAG, "nvs_set led");
         break;
 
     default:
-        ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
-        ESP_LOGI(TAG, "led_len  %d", led_len);
+        ESP_LOGI(TAG, "set led_len error  %s\n", esp_err_to_name(err));
         break;
     }
-
+    nvs_commit(handle);
     nvs_close(handle);
     return true;
 }
 
-void ws2812b_start()
+bool led_display()
 {
-
-    esp_rom_gpio_pad_select_gpio(BLINK_GPIO);
-    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
-    // get_led_state_from_nvs();//调用就蹦有问题，
     for (int i = 0; i < led_len; i++)
     {
-        ws2812b_writebyte_byt(leds_number[i]);
+        led_strip_set_pixel(led_strip, i, (leds_color[i].red) / leds_color[i].brightness, (leds_color[i].green) / leds_color[i].brightness, (leds_color[i].blue) / leds_color[i].brightness);
     }
-    while (1)
-    {
-
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
-    }
+    led_strip_refresh(led_strip);
+    return true;
 }
 
-void ws2812b_reset(int led_total)
+bool set_led_color(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness)
 {
+    led_color_t temp = {red, green, blue, brightness};
+    leds_color[index] = temp;
+    led_display();
+    ESP_LOGI(TAG, "nvs set led color %ld  %ld  %ld ", leds_color[1].red, leds_color[1].green, leds_color[1].blue);
 
-    uint32_t *p = (uint32_t *)malloc(sizeof(leds_number[0]) * led_total);
-    for (int i = 0; i < led_total; i++)
-        p[i] = 0;
-    leds_number = p;
-    for (int i = 0; i < led_total; i++)
-        ws2812b_writebyte_byt(leds_number[i]);
-    led_len = led_total;
+    // esp_err_t err;
+    // nvs_handle_t handle;
+    // nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+    // err = nvs_set_blob(handle, "leds_color", (void*)&leds_color, sizeof(leds_color[0]) * led_len);
+    // switch (err)
+    // {
+    // case ESP_OK:
+    //     ESP_LOGI(TAG, "nvs_set led_color");
+    //     break;
+
+    // default:
+    //     ESP_LOGI(TAG, "nvs_set led_color error  %s\n", esp_err_to_name(err));
+    //     break;
+    // }
+    // ESP_LOGI(TAG,"nvs get led color %ld  %ld  %ld ",leds_color[1].red,leds_color[1].green,leds_color[1].blue);
+    // nvs_commit(handle);
+    // nvs_close(handle);
+
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 10,
+        .format_if_mount_failed = true};
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(conf.partition_label, &total, &used);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
+        esp_spiffs_format(conf.partition_label);
+        return false;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+    FILE *f = fopen("/spiffs/led_color", "wb");
+    fwrite(leds_color, sizeof(leds_color[0]), led_len, f);
+    fclose(f);
+    esp_vfs_spiffs_unregister(conf.partition_label);
+    return true;
+}
+
+bool get_led_config_from_nvs()
+{
+    esp_err_t err;
     nvs_handle_t handle;
     nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-    // nvs_open_from_partition(PARTITION_NAME, STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
+    err = nvs_get_i32(handle, "led_len", (int32_t *)&led_len);
+    ESP_LOGI(TAG, "led_len  %d", led_len);
+    switch (err)
+    {
+    case ESP_OK:
+        ESP_LOGI(TAG, "nvs_get   led-len");
+        break;
 
-    nvs_set_u32(handle, "led_len", led_len);
-    esp_err_t err;
-    err = nvs_set_blob(handle, "leds", leds_number, sizeof(leds_number[0]) * led_len);
-    ESP_LOGI(TAG, " reset error  %s\n", esp_err_to_name(err));
-    nvs_commit(handle);
+    default:
+        ESP_LOGI(TAG, "nvs get led state error  %s\n", esp_err_to_name(err));
+        break;
+    }
     nvs_close(handle);
-    p = NULL;
-    free(p);
+
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 10,
+        .format_if_mount_failed = true};
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(conf.partition_label, &total, &used);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
+        esp_spiffs_format(conf.partition_label);
+        return false;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+    FILE *f = fopen("/spiffs/led_color", "rb");
+    if (f == NULL)
+    {
+        return false;
+    }
+    fread(leds_color, sizeof(leds_color[0]), led_len, f);
+    fclose(f);
+    esp_vfs_spiffs_unregister(conf.partition_label);
+    ESP_LOGI(TAG, "nvs get led color %ld  %ld  %ld ", leds_color[1].red, leds_color[1].green, leds_color[1].blue);
+    set_led_length(led_len);
+    led_display();
+    return true;
 }

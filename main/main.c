@@ -26,8 +26,8 @@
 #include "string.h"
 #include "stdlib.h"
 #include "mqtt_server.h"
-
-
+#include "esp_spiffs.h"
+static const char *TAG = "main";
 void app_main()
 {
     esp_err_t ret = nvs_flash_init();
@@ -36,26 +36,24 @@ void app_main()
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(ret);
-    nvs_flash_init_partition("map_data");
+    led_strip_config();
 
-    get_led_state_from_nvs();
-
-    xTaskCreate(&ws2812b_start, "ws2812_task", 1024, NULL, 4, NULL);
-    setPixelColor(0, 255, 0, 0, 1);
-
+    set_led_color(0, 255, 0, 0, 1);
     wifi_connect();
     while (wifi_smart_get_connect_state() != true)
     {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
-    setPixelColor(0, 255, 255, 0, 1);
+    get_led_config_from_nvs();
 
+    // led_display();
+
+
+    set_led_color(0, 255, 255, 0, 1);
     mqtt_connect();
-    
-    setPixelColor(0, 0, 255, 0, 1);
+    set_led_color(0, 0, 255, 0, 1);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
-    setPixelColor(0, 0, 0, 0, 1);
+    set_led_color(0, 0, 0, 0, 1);
 
     while (1)
     {
