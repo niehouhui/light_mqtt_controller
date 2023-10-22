@@ -46,16 +46,13 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
         msg_id = esp_mqtt_client_publish(client, MQTT_TOPIC, "map_controller connected now ", 0, 1, 0);
         ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
-
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
         msg_id = esp_mqtt_client_publish(client, MQTT_TOPIC, "map_controller disconnected now ", 0, 1, 0);
         break;
-
     case MQTT_EVENT_SUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-
         break;
     case MQTT_EVENT_UNSUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
@@ -142,7 +139,6 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
     }
     return false;
 }
-
 
 bool mqtt_config_by_spiffs()
 {

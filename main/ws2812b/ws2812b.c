@@ -160,7 +160,6 @@ bool get_led_length_from_nvs()
     case ESP_OK:
         ESP_LOGI(TAG, "nvs_get   led-len");
         break;
-
     default:
         ESP_LOGI(TAG, "nvs get led state error  %s\n", esp_err_to_name(err));
         break;
@@ -177,19 +176,6 @@ bool get_leds_color_from_spiffs()
         .max_files = 10,
         .format_if_mount_failed = true};
     esp_err_t ret = esp_vfs_spiffs_register(&conf);
-
-    size_t total = 0, used = 0;
-    ret = esp_spiffs_info(conf.partition_label, &total, &used);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
-        esp_spiffs_format(conf.partition_label);
-        return false;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-    }
     FILE *f = fopen("/spiffs/led_color", "rb");
     if (f == NULL)
     {
