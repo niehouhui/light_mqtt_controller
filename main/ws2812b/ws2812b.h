@@ -4,9 +4,6 @@
 #include <stdio.h>
 #include "unistd.h"
 
-
-
-
 bool led_strip_config();
 bool led_strip_rm();
 bool led_display();

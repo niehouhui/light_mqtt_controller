@@ -1,7 +1,6 @@
 #include "stdio.h"
 #include "string.h"
 #include "stdbool.h"
-
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_wifi.h"
@@ -13,7 +12,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define STORAGE_NAME_SPACE     "storage_data"
+#define STORAGE_NAME_SPACE "storage_data"
 
 static const char *TAG = "wifi smart config";
 
@@ -105,7 +104,6 @@ bool wifi_smart_get_connect_state()
     return wifi_is_connect;
 }
 
-
 static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
 {
@@ -122,7 +120,7 @@ bool nvs_restart_wificonfig()
     size_t wifi_len = sizeof(wifi_config);
     nvs_handle_t handle;
     ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
-    err = nvs_get_blob(handle, "blob_wifi", &wifi_config,&wifi_len);
+    err = nvs_get_blob(handle, "blob_wifi", &wifi_config, &wifi_len);
     switch (err)
     {
     case ESP_OK:
@@ -130,7 +128,7 @@ bool nvs_restart_wificonfig()
         break;
     case ESP_ERR_NVS_NOT_FOUND:
         ESP_LOGI(TAG, "wifi_config not save yet\n");
-       return wifi_is_connect = false;
+        return wifi_is_connect = false;
         break;
     default:
         ESP_LOGI(TAG, "error  %s\n", esp_err_to_name(err));
@@ -166,7 +164,8 @@ bool nvs_restart_wificonfig()
             return wifi_is_connect = true;
         counter++;
     }
-    if (err != ESP_OK) ESP_LOGI(TAG, "nvs_wifi sta connect fail return to ESP Touch config wifi");
+    if (err != ESP_OK)
+        ESP_LOGI(TAG, "nvs_wifi sta connect fail return to ESP Touch config wifi");
     esp_netif_destroy(nvs_sta);
     return wifi_is_connect = false;
 }

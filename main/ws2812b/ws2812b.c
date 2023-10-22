@@ -31,29 +31,32 @@ led_color_t *leds_color = leds_init_color;
 int led_len = 4;
 led_strip_handle_t led_strip;
 
+bool led_strip_config();
+bool led_strip_rm();
+bool led_display();
+void indicator_led(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness);
+bool set_led_color(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness);
+bool set_led_length(int led_lens);
+bool get_led_length_from_nvs();
+bool get_leds_color_from_spiffs();
+
 bool led_strip_config()
 {
     led_strip_config_t strip_config = {
-        .strip_gpio_num = LED_STRIP_GPIO,         // The GPIO that connected to the LED strip's data line
-        .max_leds = led_len,                      // The number of LEDs in the strip,
-        .led_pixel_format = LED_PIXEL_FORMAT_GRB, // Pixel format of your LED strip
-        .led_model = LED_MODEL_WS2812,            // LED strip model
-        .flags.invert_out = false,                // whether to invert the output signal
+        .strip_gpio_num = LED_STRIP_GPIO,
+        .max_leds = led_len,
+        .led_pixel_format = LED_PIXEL_FORMAT_GRB,
+        .led_model = LED_MODEL_WS2812,
+        .flags.invert_out = false,
     };
-
-    // LED strip backend configuration: RMT
     led_strip_rmt_config_t rmt_config = {
-        // .clk_src = RMT_CLK_SRC_DEFAULT,        // different clock source can lead to different power consumption
-        .resolution_hz = LED_STRIP_RMT_RES_HZ, // RMT counter clock frequency
-        // .flags.with_dma = false,               // DMA feature is available on ESP target like ESP32-S3
+        .resolution_hz = LED_STRIP_RMT_RES_HZ,
     };
     led_strip_rm();
-    // LED Strip object handle
     led_strip_handle_t led_strip_temp;
     ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip_temp));
     led_strip = led_strip_temp;
     led_strip_clear(led_strip);
-
     leds_color = (led_color_t *)malloc(sizeof(led_color_t) * led_len);
     for (int i = 0; i < led_len; i++)
     {
@@ -61,7 +64,6 @@ bool led_strip_config()
         leds_color[i] = temp;
     }
     led_display();
-
     ESP_LOGI(TAG, "Created LED strip object with RMT backend");
     return true;
 }
@@ -113,7 +115,8 @@ void indicator_led(int index, uint32_t red, uint32_t green, uint32_t blue, int b
 }
 bool set_led_color(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness)
 {
-    if(index>=led_len)return false;
+    if (index >= led_len)
+        return false;
     led_color_t temp = {red, green, blue, brightness};
     leds_color[index] = temp;
     led_display();

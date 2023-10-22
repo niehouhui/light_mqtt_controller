@@ -2,34 +2,36 @@
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
-#include "protocol_examples_common.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
-
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
-
+#include "protocol_examples_common.h"
 #include "esp_log.h"
 #include "mqtt_client.h"
+#include "mqtt_server.h"
 #include "cJSON.h"
-
 #include "ws2812b.h"
 #include "tcp_server.h"
-#include "mqtt_server.h"
-
 #include "esp_spiffs.h"
+#include "json_handle.h"
 
 #define STORAGE_NAME_SPACE "storage_data"
+#define MQTT_TOPIC "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh"
 
 static const char *TAG = "mqtt";
 size_t url_len;
 size_t client_id_len;
 size_t username_len;
 size_t password_len;
+
+void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
+bool mqtt_app_start(esp_mqtt_client_config_t cfg);
+bool mqtt_config_by_spiffs();
+void mqtt_connect();
 
 void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -40,14 +42,15 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
     {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        msg_id = esp_mqtt_client_subscribe(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", 1);
+        msg_id = esp_mqtt_client_subscribe(client, MQTT_TOPIC, 1);
         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-        msg_id = esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", "map_controller online now ", 0, 1, 0);
+        msg_id = esp_mqtt_client_publish(client, MQTT_TOPIC, "map_controller connected now ", 0, 1, 0);
         ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+        msg_id = esp_mqtt_client_publish(client, MQTT_TOPIC, "map_controller disconnected now ", 0, 1, 0);
         break;
 
     case MQTT_EVENT_SUBSCRIBED:
@@ -71,64 +74,24 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
             printf("JSON parsing error!\n");
             return;
         }
-        ////////////////////
-        nvs_handle_t handle;
-        nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-        cJSON *js_reset_led = cJSON_GetObjectItemCaseSensitive(json, "reset_led");
-        cJSON *js_led_total = cJSON_GetObjectItemCaseSensitive(json, "led_length");
-        if (js_reset_led != NULL && cJSON_IsNumber(js_reset_led))
-            if (js_reset_led->valueint == 1)
-            {
-                set_led_length(js_led_total->valueint);
-                msg_id = esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", " the led reset now", 0, 1, 0);
-                vTaskDelay(10 / portTICK_PERIOD_MS);
-                break;
-            }
 
-        cJSON *js_reset_all = cJSON_GetObjectItemCaseSensitive(json, "reset_all");
-        if (js_reset_all != NULL && cJSON_IsNumber(js_reset_all))
-            if (js_reset_all->valueint == 1)
-            {
-                nvs_erase_all(handle);
-                nvs_commit(handle);
-
-                esp_vfs_spiffs_conf_t conf = {
-                    .base_path = "/spiffs",
-                    .partition_label = NULL,
-                    .max_files = 10,
-                    .format_if_mount_failed = true};
-                esp_vfs_spiffs_register(&conf);
-
-                unlink("/spiffs/url.txt");
-                unlink("/spiffs/client.txt");
-                unlink("/spiffs/username.txt");
-                unlink("/spiffs/password.txt");
-                unlink("/spiffs/port.txt");
-                esp_vfs_spiffs_unregister(conf.partition_label);
-                vTaskDelay(100 / portTICK_PERIOD_MS);
-                printf("nvs_erase the all\n");
-                break;
-            };
-
-        nvs_close(handle);
-
-        cJSON *js_index = cJSON_GetObjectItemCaseSensitive(json, "index");
-        if (js_index != NULL && cJSON_IsNumber(js_index))
+        handle_result_t result = json_msg_handle(json);
+        switch (result)
         {
-            printf("index: %d\n", js_index->valueint);
-        }
-        cJSON *js_brightness = cJSON_GetObjectItemCaseSensitive(json, "brightness");
-        cJSON *js_red = cJSON_GetObjectItemCaseSensitive(json, "red");
-        cJSON *js_green = cJSON_GetObjectItemCaseSensitive(json, "green");
-        cJSON *js_blue = cJSON_GetObjectItemCaseSensitive(json, "blue");
-        bool err = set_led_color((js_index->valueint), (uint32_t)js_red->valueint, (uint32_t)js_green->valueint, (uint32_t)js_blue->valueint, js_brightness->valueint);
-        if (err == false)
-        {
-            esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", "Error! the index > led length !", 0, 1, 0);
-        }
-        else
-        {
-            esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", " the led changed now", 0, 1, 0);
+        case reset_led:
+            esp_mqtt_client_publish(client, MQTT_TOPIC, " the led reset now", 0, 1, 0);
+            break;
+        case reset_all:
+            esp_mqtt_client_publish(client, MQTT_TOPIC, "  reset the all now, please reboot the device ", 0, 1, 0);
+            break;
+        case set_led:
+            esp_mqtt_client_publish(client, MQTT_TOPIC, " change led color success", 0, 1, 0);
+            break;
+        case set_led_err:
+            esp_mqtt_client_publish(client, MQTT_TOPIC, " change led color fail, Err: the index > led length !", 0, 1, 0);
+            break;
+        default:
+            break;
         }
 
         break;
@@ -142,128 +105,6 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
     default:
         ESP_LOGI(TAG, "Other event id:%d", event->event_id);
         break;
-    }
-}
-
-bool mqtt_config_by_tcp()
-{
-    char mqtt_url[128] = {0};
-    char client_id[128] = {0};
-    char username[128] = {0};
-    char password[128] = {0};
-    char mqtt_port_s[128] = {0};
-    int mqtt_port_i = 0;
-    char check_end[5] = {0};
-    int len = 128;
-    int tcp_socket = 0;
-    while (!(tcp_socket = create_tcp_server()))
-    {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-
-    while (!(strncmp("yes", check_end, 4) == 0))
-    {
-        char *guide_string = "please input the mqtt url,end with Enter\r\n";
-        tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, mqtt_url, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
-
-        guide_string = "please input the client_id,end with Enter\r\n";
-        tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, client_id, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
-
-        guide_string = "please input the username,end with Enter\r\n";
-        tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, username, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
-
-        guide_string = "please input the password,end with Enter\r\n";
-        tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, password, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
-
-        guide_string = "please input the mqtt_port,end with Enterr\r\n";
-        tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, mqtt_port_s, len) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
-        mqtt_port_i = atoi(mqtt_port_s);
-
-        guide_string = "Check the message,input \"yes\" to save message, input \"not\" to reset the message\r\n";
-        tcp_send(tcp_socket, guide_string, strlen(guide_string));
-        while (tcp_recvs(tcp_socket, check_end, 4) != 1)
-        {
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-        }
-    }
-
-    esp_mqtt_client_config_t mqtt_tcp_cfg = {
-        .broker.address.uri = mqtt_url,
-        .credentials.client_id = client_id,
-        .credentials.username = username,
-        .credentials.authentication.password = password,
-        .broker.address.port = mqtt_port_i,
-    };
-
-    if (mqtt_app_start(mqtt_tcp_cfg))
-    {
-        ESP_LOGI(TAG, "Initializing SPIFFS");
-        esp_vfs_spiffs_conf_t conf = {
-            .base_path = "/spiffs",
-            .partition_label = NULL,
-            .max_files = 10,
-            .format_if_mount_failed = true};
-        esp_err_t ret = esp_vfs_spiffs_register(&conf);
-
-        size_t total = 0, used = 0;
-        ret = esp_spiffs_info(conf.partition_label, &total, &used);
-        if (ret != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
-            esp_spiffs_format(conf.partition_label);
-            return false;
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-        }
-
-        FILE *f = fopen("/spiffs/url.txt", "w");
-        fprintf(f, mqtt_url);
-        fclose(f);
-        f = fopen("/spiffs/client.txt", "w");
-        fprintf(f, client_id);
-        fclose(f);
-        f = fopen("/spiffs/username.txt", "w");
-        fprintf(f, username);
-        fclose(f);
-        f = fopen("/spiffs/password.txt", "w");
-        fprintf(f, password);
-        fclose(f);
-        f = fopen("/spiffs/port.txt", "w");
-        fprintf(f, mqtt_port_s);
-        fclose(f);
-        esp_vfs_spiffs_unregister(conf.partition_label);
-
-        close_tcp_server();
-        return true;
-    }
-    else
-    {
-        char *warn = "mqtt config message error,try again\r\n";
-        tcp_send(tcp_socket, warn, strlen(warn));
-        close_tcp_server();
-        return false;
     }
 }
 
@@ -302,10 +143,6 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
     return false;
 }
 
-bool mqtt_config_by_nvs()
-{
-    return false; // todo nvs存取mqtt连接信息，上电自动连接mqtt
-}
 
 bool mqtt_config_by_spiffs()
 {
@@ -322,20 +159,7 @@ bool mqtt_config_by_spiffs()
         .partition_label = NULL,
         .max_files = 10,
         .format_if_mount_failed = true};
-    esp_err_t ret = esp_vfs_spiffs_register(&conf);
-
-    size_t total = 0, used = 0;
-    ret = esp_spiffs_info(conf.partition_label, &total, &used);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
-        esp_spiffs_format(conf.partition_label);
-        return false;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-    }
+    esp_vfs_spiffs_register(&conf);
 
     FILE *f = fopen("/spiffs/client.txt", "r");
     if (f == NULL)
@@ -365,6 +189,8 @@ bool mqtt_config_by_spiffs()
         .credentials.username = username,
         .credentials.authentication.password = password,
         .broker.address.port = mqtt_port_i,
+        .network.disable_auto_reconnect = false,
+        .session.keepalive = 10,
     };
     ESP_LOGI(TAG, "mqtt_cfg  id %s url %s username %s mqtt_port %ld", mqtt_cfg.credentials.client_id, mqtt_cfg.broker.address.uri, mqtt_cfg.credentials.username, mqtt_cfg.broker.address.port);
     return mqtt_app_start(mqtt_cfg);
@@ -378,12 +204,8 @@ void mqtt_connect()
     }
     else
     {
-        set_led_color(0, 0, 0, 255, 1);
-        mqtt_config_by_tcp();
-        // while (!mqtt_config_by_tcp())
-        // {
-        //     vTaskDelay(1000/portTICK_PERIOD_MS);
-        //     ESP_LOGI(TAG, "mqtt config message error,try again");
-        // }
+        indicator_led(0, 0, 0, 255, 1);
+        ESP_LOGI(TAG, "mqtt set by tcp");
+        tcp_config_mqtt();
     }
 }

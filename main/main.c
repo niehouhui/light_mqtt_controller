@@ -1,25 +1,12 @@
 #include <stdio.h>
-#include <stdint.h>
-#include <stddef.h>
-#include <string.h>
 #include "esp_wifi.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_netif.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
-#include "freertos/queue.h"
-
-#include "lwip/sockets.h"
-#include "lwip/dns.h"
-#include "lwip/netdb.h"
-
 #include "esp_log.h"
-//////////////////////////////////////
-
 #include "ws2812b.h"
 #include "wifi_smart_config.h"
 #include "tcp_server.h"
@@ -27,7 +14,7 @@
 #include "stdlib.h"
 #include "mqtt_server.h"
 #include "esp_spiffs.h"
-static const char *TAG = "main";
+
 void app_main()
 {
     esp_err_t ret = nvs_flash_init();
@@ -48,8 +35,8 @@ void app_main()
 
     indicator_led(0, 255, 255, 0, 1);
     mqtt_connect();
+    
     indicator_led(0, 0, 255, 0, 1);
-
     get_leds_color_from_spiffs();
     led_display();
 
