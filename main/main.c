@@ -36,24 +36,22 @@ void app_main()
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
+    get_led_length_from_nvs();
     led_strip_config();
 
-    set_led_color(0, 255, 0, 0, 1);
+    indicator_led(0, 255, 0, 0, 1);
     wifi_connect();
     while (wifi_smart_get_connect_state() != true)
     {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
-    get_led_config_from_nvs();
 
-    // led_display();
-
-
-    set_led_color(0, 255, 255, 0, 1);
+    indicator_led(0, 255, 255, 0, 1);
     mqtt_connect();
-    set_led_color(0, 0, 255, 0, 1);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    set_led_color(0, 0, 0, 0, 1);
+    indicator_led(0, 0, 255, 0, 1);
+
+    get_leds_color_from_spiffs();
+    led_display();
 
     while (1)
     {

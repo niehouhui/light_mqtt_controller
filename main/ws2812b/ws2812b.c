@@ -54,6 +54,14 @@ bool led_strip_config()
     led_strip = led_strip_temp;
     led_strip_clear(led_strip);
 
+    leds_color = (led_color_t *)malloc(sizeof(led_color_t) * led_len);
+    for (int i = 0; i < led_len; i++)
+    {
+        led_color_t temp = {0, 0, 0, 1};
+        leds_color[i] = temp;
+    }
+    led_display();
+
     ESP_LOGI(TAG, "Created LED strip object with RMT backend");
     return true;
 }
@@ -65,16 +73,8 @@ bool led_strip_rm()
 
 bool set_led_length(int led_lens)
 {
-
     led_len = led_lens;
-    leds_color = (led_color_t *)malloc(sizeof(led_color_t) * led_len);
-    for (int i = 0; i < led_len; i++)
-    {
-        led_color_t temp = {0, 0, 0, 1};
-        leds_color[i] = temp;
-    }
     led_strip_config();
-    led_display();
     esp_err_t err;
     nvs_handle_t handle;
     err = nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
@@ -105,30 +105,19 @@ bool led_display()
     return true;
 }
 
-bool set_led_color(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness)
+void indicator_led(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness)
 {
     led_color_t temp = {red, green, blue, brightness};
     leds_color[index] = temp;
     led_display();
-    ESP_LOGI(TAG, "nvs set led color %ld  %ld  %ld ", leds_color[1].red, leds_color[1].green, leds_color[1].blue);
-
-    // esp_err_t err;
-    // nvs_handle_t handle;
-    // nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);
-    // err = nvs_set_blob(handle, "leds_color", (void*)&leds_color, sizeof(leds_color[0]) * led_len);
-    // switch (err)
-    // {
-    // case ESP_OK:
-    //     ESP_LOGI(TAG, "nvs_set led_color");
-    //     break;
-
-    // default:
-    //     ESP_LOGI(TAG, "nvs_set led_color error  %s\n", esp_err_to_name(err));
-    //     break;
-    // }
-    // ESP_LOGI(TAG,"nvs get led color %ld  %ld  %ld ",leds_color[1].red,leds_color[1].green,leds_color[1].blue);
-    // nvs_commit(handle);
-    // nvs_close(handle);
+}
+bool set_led_color(int index, uint32_t red, uint32_t green, uint32_t blue, int brightness)
+{
+    if(index>=led_len)return false;
+    led_color_t temp = {red, green, blue, brightness};
+    leds_color[index] = temp;
+    led_display();
+    ESP_LOGI(TAG, "nvs set led color %ld  %ld  %ld ", leds_color[index].red, leds_color[index].green, leds_color[index].blue);
 
     esp_vfs_spiffs_conf_t conf = {
         .base_path = "/spiffs",
@@ -156,7 +145,7 @@ bool set_led_color(int index, uint32_t red, uint32_t green, uint32_t blue, int b
     return true;
 }
 
-bool get_led_config_from_nvs()
+bool get_led_length_from_nvs()
 {
     esp_err_t err;
     nvs_handle_t handle;
@@ -174,7 +163,11 @@ bool get_led_config_from_nvs()
         break;
     }
     nvs_close(handle);
+    return true;
+}
 
+bool get_leds_color_from_spiffs()
+{
     esp_vfs_spiffs_conf_t conf = {
         .base_path = "/spiffs",
         .partition_label = NULL,
@@ -202,8 +195,6 @@ bool get_led_config_from_nvs()
     fread(leds_color, sizeof(leds_color[0]), led_len, f);
     fclose(f);
     esp_vfs_spiffs_unregister(conf.partition_label);
-    ESP_LOGI(TAG, "nvs get led color %ld  %ld  %ld ", leds_color[1].red, leds_color[1].green, leds_color[1].blue);
-    set_led_length(led_len);
-    led_display();
+    ESP_LOGI(TAG, "spiffs get led color %ld  %ld  %ld ", leds_color[0].red, leds_color[0].green, leds_color[0].blue);
     return true;
 }

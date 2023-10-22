@@ -121,8 +121,15 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
         cJSON *js_red = cJSON_GetObjectItemCaseSensitive(json, "red");
         cJSON *js_green = cJSON_GetObjectItemCaseSensitive(json, "green");
         cJSON *js_blue = cJSON_GetObjectItemCaseSensitive(json, "blue");
-        set_led_color((js_index->valueint), (uint32_t)js_red->valueint, (uint32_t)js_green->valueint, (uint32_t)js_blue->valueint, js_brightness->valueint);
-        msg_id = esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", " the led changed now", 0, 1, 0);
+        bool err = set_led_color((js_index->valueint), (uint32_t)js_red->valueint, (uint32_t)js_green->valueint, (uint32_t)js_blue->valueint, js_brightness->valueint);
+        if (err == false)
+        {
+            esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", "Error! the index > led length !", 0, 1, 0);
+        }
+        else
+        {
+            esp_mqtt_client_publish(client, "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh", " the led changed now", 0, 1, 0);
+        }
 
         break;
     case MQTT_EVENT_ERROR:
@@ -155,7 +162,7 @@ bool mqtt_config_by_tcp()
     }
 
     while (!(strncmp("yes", check_end, 4) == 0))
-    { // bug 这个过程中tcp中断会死循环；
+    {
         char *guide_string = "please input the mqtt url,end with Enter\r\n";
         tcp_send(tcp_socket, guide_string, strlen(guide_string));
         while (tcp_recvs(tcp_socket, mqtt_url, len) != 1)
@@ -371,7 +378,7 @@ void mqtt_connect()
     }
     else
     {
-        set_led_color(0,0,0,255,1);
+        set_led_color(0, 0, 0, 255, 1);
         mqtt_config_by_tcp();
         // while (!mqtt_config_by_tcp())
         // {
