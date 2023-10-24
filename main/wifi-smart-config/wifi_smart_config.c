@@ -54,8 +54,6 @@ void wifi_smart_config_task(void *arg, esp_event_base_t event_base, int32_t even
         if (esp_wifi_connect() == ESP_OK)
         {
             ESP_LOGI(TAG, "wifi sta connect success");
-
-            // nhh nvs
             esp_err_t err;
             nvs_handle_t handle;
             nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle);

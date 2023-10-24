@@ -4,6 +4,6 @@
 #include "mqtt_client.h"
 
 bool mqtt_app_start(esp_mqtt_client_config_t cfg);
-void mqtt_connect();
+bool mqtt_config_by_spiffs();
 
 #endif

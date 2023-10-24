@@ -13,26 +13,14 @@
 #include "esp_spiffs.h"
 
 #define TAG "TCP"
-static int tcp_connect_socket = 0;
-static int tcp_server_socket = 0;
+int tcp_server_socket = 0;
 static struct sockaddr_in tcp_client_addr;
 static unsigned int tcp_socklen = sizeof(tcp_client_addr);
 
-int create_tcp_server();
-void close_tcp_server();
-void tcp_send(int socket, char *data, int data_len);
-int tcp_recvs(int socket, char *data, int data_len);
-int reconnect();
-bool tcp_config_mqtt();
-
-void close_tcp_server()
+tcp_connect_socket_i create_tcp_server()
 {
-	close(tcp_connect_socket);
-	close(tcp_server_socket);
-}
 
-int create_tcp_server()
-{
+	int tcp_connect_socket = 0;
 	static struct sockaddr_in tcp_server_addr;
 	tcp_server_socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (tcp_server_socket < 0)
@@ -58,7 +46,7 @@ int create_tcp_server()
 		return ESP_FAIL;
 	}
 
-	tcp_connect_socket = accept(tcp_server_socket, (struct sockaddr *)&tcp_client_addr, &tcp_socklen);
+	tcp_connect_socket = accept(tcp_server_socket, (struct sockaddr *)&tcp_client_addr, (socklen_t *)&tcp_socklen);
 	if (tcp_connect_socket < 0)
 	{
 		close(tcp_server_socket);
@@ -68,30 +56,27 @@ int create_tcp_server()
 	return tcp_connect_socket;
 }
 
+void del_tcp_server(tcp_connect_socket_i tcp_connect_socket)
+{
+	close(tcp_connect_socket);
+	close(tcp_server_socket);
+}
+
 void tcp_send(int socket, char *data, int data_len)
 {
 	send(socket, data, data_len, 0);
 	ESP_LOGI(TAG, "data send success");
 }
-int tcp_recvs(int socket, char *data, int data_len)
+bool tcp_recvs(int socket, char *data, int data_len)
 {
 	int i = recv(socket, data, data_len, 0);
 	printf("receive_data: %s   %d\n", data, i);
 	send(socket, data, i, 0);
 	send(socket, "\r\n", 3, 0);
-	return 1;
+return true;
 }
 
-int reconnect()
-{
-	listen(tcp_server_socket, 5);
-
-	tcp_connect_socket = accept(tcp_server_socket, (struct sockaddr *)&tcp_client_addr, &tcp_socklen);
-	ESP_LOGI(TAG, "tcp connection :%d\n", tcp_connect_socket);
-	return tcp_connect_socket;
-}
-
-bool tcp_config_mqtt()
+esp_mqtt_client_config_t tcp_config_mqtt_and_save_config(tcp_connect_socket_i tcp_socket)
 {
 	char mqtt_url[128] = {0};
 	char client_id[128] = {0};
@@ -101,53 +86,47 @@ bool tcp_config_mqtt()
 	int mqtt_port_i = 0;
 	char check_end[5] = {0};
 	int len = 128;
-	int tcp_socket = 0;
-	while (!(tcp_socket = create_tcp_server()))
-	{
-		vTaskDelay(1000 / portTICK_PERIOD_MS);
-	}
 
 	while (!(strncmp("yes", check_end, 4) == 0))
 	{
 		char *guide_string = "please input the mqtt url,end with Enter\r\n";
 		tcp_send(tcp_socket, guide_string, strlen(guide_string));
-		while (tcp_recvs(tcp_socket, mqtt_url, len) != 1)
+		while (tcp_recvs(tcp_socket, mqtt_url, len) != true)
 		{
 			vTaskDelay(2000 / portTICK_PERIOD_MS);
 		}
 		guide_string = "please input the client_id,end with Enter\r\n";
 		tcp_send(tcp_socket, guide_string, strlen(guide_string));
-		while (tcp_recvs(tcp_socket, client_id, len) != 1)
+		while (tcp_recvs(tcp_socket, client_id, len) != true)
 		{
 			vTaskDelay(2000 / portTICK_PERIOD_MS);
 		}
 		guide_string = "please input the username,end with Enter\r\n";
 		tcp_send(tcp_socket, guide_string, strlen(guide_string));
-		while (tcp_recvs(tcp_socket, username, len) != 1)
+		while (tcp_recvs(tcp_socket, username, len) != true)
 		{
 			vTaskDelay(2000 / portTICK_PERIOD_MS);
 		}
 		guide_string = "please input the password,end with Enter\r\n";
 		tcp_send(tcp_socket, guide_string, strlen(guide_string));
-		while (tcp_recvs(tcp_socket, password, len) != 1)
+		while (tcp_recvs(tcp_socket, password, len) != true)
 		{
 			vTaskDelay(2000 / portTICK_PERIOD_MS);
 		}
 		guide_string = "please input the mqtt_port,end with Enterr\r\n";
 		tcp_send(tcp_socket, guide_string, strlen(guide_string));
-		while (tcp_recvs(tcp_socket, mqtt_port_s, len) != 1)
+		while (tcp_recvs(tcp_socket, mqtt_port_s, len) != true)
 		{
 			vTaskDelay(2000 / portTICK_PERIOD_MS);
 		}
 		mqtt_port_i = atoi(mqtt_port_s);
 		guide_string = "Check the message,input \"yes\" to save message, input \"not\" to reset the message\r\n";
 		tcp_send(tcp_socket, guide_string, strlen(guide_string));
-		while (tcp_recvs(tcp_socket, check_end, 4) != 1)
+		while (tcp_recvs(tcp_socket, check_end, 4) != true)
 		{
 			vTaskDelay(2000 / portTICK_PERIOD_MS);
 		}
 	}
-	close_tcp_server();
 
 	ESP_LOGI(TAG, "Initializing SPIFFS");
 	esp_vfs_spiffs_conf_t conf = {
@@ -182,6 +161,5 @@ bool tcp_config_mqtt()
 		.network.disable_auto_reconnect = false,
 		.session.keepalive = 10,
 	};
-	mqtt_app_start(mqtt_tcp_cfg);
-	return true;
+	return mqtt_tcp_cfg;
 }

@@ -85,7 +85,7 @@ static esp_err_t led_strip_rmt_clear(led_strip_t *strip)
     return led_strip_rmt_refresh(strip);
 }
 
- esp_err_t led_strip_rmt_del(led_strip_t *strip)
+static esp_err_t led_strip_rmt_del(led_strip_t *strip)
 {
     led_strip_rmt_obj *rmt_strip = __containerof(strip, led_strip_rmt_obj, base);
     ESP_RETURN_ON_ERROR(rmt_del_channel(rmt_strip->rmt_chan), TAG, "delete RMT channel failed");

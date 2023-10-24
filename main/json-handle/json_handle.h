@@ -14,5 +14,7 @@ typedef enum
 } handle_result_t;
 
 handle_result_t json_msg_handle(cJSON *json);
+void json_get_led_strip(led_strip_handle_t led_strip);
+
 
 #endif

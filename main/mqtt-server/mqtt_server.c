@@ -9,7 +9,6 @@
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
 #include "lwip/netdb.h"
-#include "protocol_examples_common.h"
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "mqtt_server.h"
@@ -23,10 +22,6 @@
 #define MQTT_TOPIC "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh"
 
 static const char *TAG = "mqtt";
-size_t url_len;
-size_t client_id_len;
-size_t username_len;
-size_t password_len;
 
 void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 bool mqtt_app_start(esp_mqtt_client_config_t cfg);
@@ -111,33 +106,13 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
     esp_mqtt_client_config_t mqtt_cfg = cfg;
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     if (client == NULL)
-    {
         return false;
-    }
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
-
     esp_err_t err;
     err = esp_mqtt_client_start(client);
-    if (err == ESP_OK)
-    { // mark 迭代nvs命名空间
-        nvs_handle_t handle;
-        ESP_ERROR_CHECK(nvs_open(STORAGE_NAME_SPACE, NVS_READWRITE, &handle));
-
-        nvs_iterator_t it = NULL;
-        esp_err_t res = nvs_entry_find("nvs", STORAGE_NAME_SPACE, NVS_TYPE_ANY, &it);
-        while (res == ESP_OK)
-        {
-            nvs_entry_info_t info;
-            nvs_entry_info(it, &info);
-            printf("key '%s', type '%d' \n", info.key, info.type);
-            res = nvs_entry_next(&it);
-        }
-        nvs_release_iterator(it);
-
-        nvs_close(handle);
-        return true;
-    }
-    return false;
+    if (err != ESP_OK)
+        return false;
+    return true;
 }
 
 bool mqtt_config_by_spiffs()
@@ -190,18 +165,4 @@ bool mqtt_config_by_spiffs()
     };
     ESP_LOGI(TAG, "mqtt_cfg  id %s url %s username %s mqtt_port %ld", mqtt_cfg.credentials.client_id, mqtt_cfg.broker.address.uri, mqtt_cfg.credentials.username, mqtt_cfg.broker.address.port);
     return mqtt_app_start(mqtt_cfg);
-}
-
-void mqtt_connect()
-{
-    if (mqtt_config_by_spiffs())
-    {
-        ESP_LOGI(TAG, "mqtt set by spiffs success");
-    }
-    else
-    {
-        indicator_led(0, 0, 0, 255, 1);
-        ESP_LOGI(TAG, "mqtt set by tcp");
-        tcp_config_mqtt();
-    }
 }
