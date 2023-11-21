@@ -2,7 +2,8 @@
 #define __cjson_handle_h__
 
 #include "cJSON.h"
-
+#include "led_strip.h"
+#include "led_strip_rmt.h"
 typedef enum
 {
     reset_led,

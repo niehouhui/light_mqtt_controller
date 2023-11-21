@@ -44,9 +44,7 @@ void wifi_smart_config_task(void *arg, esp_event_base_t event_base, int32_t even
         memcpy(wifi_config.sta.password, smart_config_event_got_ssid_password->password, sizeof(wifi_config.sta.password));
         wifi_config.sta.bssid_set = smart_config_event_got_ssid_password->bssid_set;
         if (wifi_config.sta.bssid_set == true)
-        {
             memcpy(wifi_config.sta.bssid, smart_config_event_got_ssid_password->bssid, sizeof(wifi_config.sta.bssid));
-        }
 
         ESP_LOGI(TAG, "ssid : %s", smart_config_event_got_ssid_password->ssid);
         ESP_LOGI(TAG, "password : %s", smart_config_event_got_ssid_password->password);
@@ -106,12 +104,10 @@ static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
-    {
         esp_wifi_connect();
-    }
 }
 
-bool nvs_restart_wificonfig()
+bool wifi_restart_by_nvs()
 {
     esp_err_t err;
     wifi_config_t wifi_config;
@@ -166,16 +162,4 @@ bool nvs_restart_wificonfig()
         ESP_LOGI(TAG, "nvs_wifi sta connect fail return to ESP Touch config wifi");
     esp_netif_destroy(nvs_sta);
     return wifi_is_connect = false;
-}
-
-void wifi_connect()
-{
-    if (nvs_restart_wificonfig())
-    {
-        ESP_LOGI(TAG, "wifi_config_by_nvs success");
-    }
-    else
-    {
-        wifi_smart_config_init();
-    }
 }

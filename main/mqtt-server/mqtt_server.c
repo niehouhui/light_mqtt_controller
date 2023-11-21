@@ -4,7 +4,6 @@
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
 #include "freertos/queue.h"
 #include "lwip/sockets.h"
 #include "lwip/dns.h"
@@ -13,20 +12,15 @@
 #include "mqtt_client.h"
 #include "mqtt_server.h"
 #include "cJSON.h"
-#include "ws2812b.h"
-#include "tcp_server.h"
 #include "esp_spiffs.h"
 #include "json_handle.h"
+#include <stdio.h>
+#include <string.h>
 
 #define STORAGE_NAME_SPACE "storage_data"
-#define MQTT_TOPIC "/fd7764f2-ad70-d04c-9427-d72b837cb935/recvnhh"
+#define MQTT_TOPIC "/fd7764f2-ad70-d04c-9427-d72b837cb935/recv"
 
 static const char *TAG = "mqtt";
-
-void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
-bool mqtt_app_start(esp_mqtt_client_config_t cfg);
-bool mqtt_config_by_spiffs();
-void mqtt_connect();
 
 void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -102,7 +96,6 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
 
 bool mqtt_app_start(esp_mqtt_client_config_t cfg)
 {
-
     esp_mqtt_client_config_t mqtt_cfg = cfg;
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     if (client == NULL)
@@ -115,15 +108,8 @@ bool mqtt_app_start(esp_mqtt_client_config_t cfg)
     return true;
 }
 
-bool mqtt_config_by_spiffs()
+bool set_mqtt_config_by_spiffs(esp_mqtt_client_config_t* mqtt_cfg)
 {
-    char mqtt_url[128] = {0};
-    char client_id[128] = {0};
-    char username[128] = {0};
-    char password[128] = {0};
-    char mqtt_port_s[128] = {0};
-    int mqtt_port_i = 0;
-
     ESP_LOGI(TAG, "Initializing SPIFFS");
     esp_vfs_spiffs_conf_t conf = {
         .base_path = "/spiffs",
@@ -135,34 +121,39 @@ bool mqtt_config_by_spiffs()
     FILE *f = fopen("/spiffs/client.txt", "r");
     if (f == NULL)
         return false;
-    fgets(client_id, sizeof(client_id), f);
+    char* client_id = (char*)malloc(sizeof(char)*64);
+    fgets(client_id, sizeof(char)*64, f);
     fclose(f);
     f = fopen("/spiffs/url.txt", "r");
-    fgets(mqtt_url, sizeof(mqtt_url), f);
+    char* mqtt_url = (char*)malloc(sizeof(char)*128);
+    fgets(mqtt_url, sizeof(char)*64, f);
     fclose(f);
     f = fopen("/spiffs/username.txt", "r");
-    fgets(username, sizeof(username), f);
+    char* username = (char*)malloc(sizeof(char)*64);
+    fgets(username, sizeof(char)*64, f);
     fclose(f);
     f = fopen("/spiffs/password.txt", "r");
-    fgets(password, sizeof(password), f);
+    char* password = (char*)malloc(sizeof(char)*64);
+    fgets(password, sizeof(char)*64, f);
     fclose(f);
     f = fopen("/spiffs/port.txt", "r");
-    fgets(mqtt_port_s, sizeof(mqtt_port_s), f);
-    mqtt_port_i = atoi(mqtt_port_s);
+    char* mqtt_port_s = (char*)malloc(sizeof(char)*64);
+    fgets(mqtt_port_s, sizeof(char)*64, f);
+    int mqtt_port_i = atoi(mqtt_port_s);
     fclose(f);
 
     esp_vfs_spiffs_unregister(conf.partition_label);
-    memcpy(client_id, "MQTT_Clients", sizeof("MQTT_Clients"));
 
-    esp_mqtt_client_config_t mqtt_cfg = {
+    esp_mqtt_client_config_t cfg = {
         .broker.address.uri = mqtt_url,
-        .credentials.client_id = client_id,
+        .credentials.client_id = "fiberdoctormqttclient",
         .credentials.username = username,
         .credentials.authentication.password = password,
         .broker.address.port = mqtt_port_i,
         .network.disable_auto_reconnect = false,
-        .session.keepalive = 10,
+        .session.keepalive = 100,
     };
-    ESP_LOGI(TAG, "mqtt_cfg  id %s url %s username %s mqtt_port %ld", mqtt_cfg.credentials.client_id, mqtt_cfg.broker.address.uri, mqtt_cfg.credentials.username, mqtt_cfg.broker.address.port);
-    return mqtt_app_start(mqtt_cfg);
+    *mqtt_cfg =cfg;   
+     ESP_LOGI(TAG, "mqtt_cfg  id %s url %s username %s mqtt_port %ld",  (*mqtt_cfg).credentials.client_id,  (*mqtt_cfg).broker.address.uri,  (*mqtt_cfg).credentials.username,  (*mqtt_cfg).broker.address.port);                                                                       
+    return true;
 }

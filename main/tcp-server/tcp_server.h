@@ -9,12 +9,10 @@
 
 #define Listen_TCP_Port 8080
 
-typedef int tcp_connect_socket_i;
-
-tcp_connect_socket_i create_tcp_server();
-void del_tcp_server(tcp_connect_socket_i tcp_connect_socket);
+int create_tcp_server();
+void del_tcp_server(int tcp_connect_socket);
 void tcp_send(int socket, char *data, int data_len);
 bool tcp_recvs(int socket, char *data, int data_len);
-esp_mqtt_client_config_t tcp_config_mqtt_and_save_config(tcp_connect_socket_i tcp_socket);
+esp_mqtt_client_config_t get_mqttconfig_by_tcp(int tcp_socket);
 
 #endif

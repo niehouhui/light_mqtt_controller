@@ -17,9 +17,8 @@ int tcp_server_socket = 0;
 static struct sockaddr_in tcp_client_addr;
 static unsigned int tcp_socklen = sizeof(tcp_client_addr);
 
-tcp_connect_socket_i create_tcp_server()
+int create_tcp_server()
 {
-
 	int tcp_connect_socket = 0;
 	static struct sockaddr_in tcp_server_addr;
 	tcp_server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -56,7 +55,7 @@ tcp_connect_socket_i create_tcp_server()
 	return tcp_connect_socket;
 }
 
-void del_tcp_server(tcp_connect_socket_i tcp_connect_socket)
+void del_tcp_server(int tcp_connect_socket)
 {
 	close(tcp_connect_socket);
 	close(tcp_server_socket);
@@ -73,10 +72,10 @@ bool tcp_recvs(int socket, char *data, int data_len)
 	printf("receive_data: %s   %d\n", data, i);
 	send(socket, data, i, 0);
 	send(socket, "\r\n", 3, 0);
-return true;
+	return true;
 }
 
-esp_mqtt_client_config_t tcp_config_mqtt_and_save_config(tcp_connect_socket_i tcp_socket)
+esp_mqtt_client_config_t get_mqttconfig_by_tcp(int tcp_socket)
 {
 	char mqtt_url[128] = {0};
 	char client_id[128] = {0};

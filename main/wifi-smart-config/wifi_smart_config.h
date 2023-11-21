@@ -3,6 +3,6 @@
 
 void wifi_smart_config_init();
 bool wifi_smart_get_connect_state();
-void wifi_connect();
+bool wifi_restart_by_nvs();
 
 #endif

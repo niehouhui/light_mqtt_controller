@@ -122,7 +122,7 @@ void set_led_color(led_strip_handle_t led_strip, uint32_t index, uint32_t red, u
     }
 }
 
-void get_leds_color_from_spiffs(led_strip_handle_t led_strip)
+void set_leds_color_from_spiffs(led_strip_handle_t led_strip)
 {
     uint32_t length = get_led_length();
     esp_vfs_spiffs_register(&conf);
@@ -141,4 +141,24 @@ void get_leds_color_from_spiffs(led_strip_handle_t led_strip)
         led_strip_set_pixel(led_strip, i, (leds_color[i].red) / leds_color[i].brightness, (leds_color[i].green) / leds_color[i].brightness, (leds_color[i].blue) / leds_color[i].brightness);
     }
     led_strip_refresh(led_strip);
+}
+
+void led_started_show_redlight(led_strip_handle_t led_strip)
+{
+    set_led_color(led_strip, 0, 255, 0, 0, 1, false);
+}
+
+void wifi_connected_show_yellowlight(led_strip_handle_t led_strip)
+{
+    set_led_color(led_strip, 0, 0, 255, 255, 1, false);
+}
+
+void mqtt_connected_show_greenlight(led_strip_handle_t led_strip)
+{
+    set_led_color(led_strip, 0, 0, 255, 0, 1, false);
+}
+
+void tcp_connected_set_mqtt_show_bluelight(led_strip_handle_t led_strip)
+{
+    set_led_color(led_strip, 0, 0, 0, 255, 1, false);
 }

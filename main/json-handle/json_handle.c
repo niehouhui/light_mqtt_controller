@@ -23,14 +23,13 @@ handle_result_t json_msg_handle(cJSON *json)
     if (json_led_strip == NULL)
         return reset_led_err;
     cJSON *js_reset_led = cJSON_GetObjectItemCaseSensitive(json, "reset_led");
-    cJSON *js_led_total = cJSON_GetObjectItemCaseSensitive(json, "led_length");
+    cJSON *js_led_length = cJSON_GetObjectItemCaseSensitive(json, "led_length");
     if (js_reset_led != NULL && cJSON_IsNumber(js_reset_led))
         if (js_reset_led->valueint == 1)
         {
-
-            save_led_length(js_reset_led->valueint);
-            json_led_strip = led_strip_init(js_reset_led->valueint);
-            ESP_LOGI(TAG, "reset leds color and length :%d", js_reset_led->valueint);
+            save_led_length(js_led_length->valueint);
+            json_led_strip = led_strip_init(js_led_length->valueint);
+            ESP_LOGI(TAG, "reset leds color and length :%d", js_led_length->valueint);
             return reset_led;
         }
 
