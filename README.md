@@ -18,22 +18,22 @@ mqtt订阅的topic为
 **/fd7764f2-ad70-d04c-9427-d72b837cb935/recv**
 
 ##发布json格式命令
-'''
+```
 {
-"led_total" : 6,
+"led_length" : 32,
 "reset_led" : 0,
-"index" :  0,
+"index" :  25,
 "brightness" : 1,
-"red"  : 0,
-"green" :0,
-"blue" :  0,
+"red"  : 255,
+"green" : 0,
+"blue" :  255,
 "reset_all" : 0
 }
-'''
-led_total为led总数，要重新设置时，先改total，再设reset_led为 1，
-index为下标，0~（total-1），brightness为亮度，1~9，可分为2，4，8，三个明显的改变亮度，
-red，green，blue，0~255，
-
+```
+"led_length"为led总数，要重新设置时，先改led_length，再设reset_led为 1 。\
+"index"为下标，0到（total-1）。\
+"brightness"为亮度，1~9，可使用2，4，8，为三个明显的亮度分档.
+red，green，blue范围0~255。\
 reset_all设为 1 时，即清空所有保存的WiFi，mqtt，led信息，重启后重新设置。
 
 
